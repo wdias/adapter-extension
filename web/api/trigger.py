@@ -29,6 +29,22 @@ def extension_trigger_get(conn, extension_id):
     return triggers
 
 
+def extension_get_trigger_type(conn, trigger_type, timeseries_id=None):
+    assert trigger_type in ['OnChange', 'OnTime'], \
+        f'trigger trigger_type should have one of "OnChange", "OnTime"'
+    if timeseries_id is None:
+        rows = conn.execute(sql('''
+            SELECT extensionId
+            FROM triggers WHERE trigger_type=:trigger_type
+        '''), trigger_type=trigger_type).fetchall()
+    else:
+        rows = conn.execute(sql('''
+            SELECT extensionId
+            FROM triggers WHERE trigger_type=:trigger_type AND trigger_on=:timeseries_id
+        '''), trigger_type=trigger_type, timeseries_id=timeseries_id).fetchall()
+    return [r['extensionId'] for r in rows]
+
+
 def extension_trigger_delete(conn, extension_id):
     rows = conn.execute(sql('''
         DELETE FROM triggers

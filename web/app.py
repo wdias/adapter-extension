@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify
-from web import util
 from web.api import extension
 
 try:
