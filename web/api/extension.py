@@ -79,7 +79,7 @@ def extension_get(extension_id):
     assert extension, f'Extension does not exists: {extension_id}'
     extension = dict(extension)
     data = json.loads(extension['data'])
-    data['trigger'] = trigger.extension_trigger_get(ENGINE, extension_id)
+    extension['trigger'] = trigger.extension_trigger_get(ENGINE, extension_id)
     extension['variables'] = data['variables']
     extension['inputVariables'] = data['inputVariables']
     extension['outputVariables'] = data['outputVariables']
@@ -90,7 +90,7 @@ def extension_get(extension_id):
 
 @bp.route('/extension/trigger_type/<trigger_type>', methods=['GET'])
 def extension_get_trigger_on(trigger_type):
-    timeseries_id = request.args.get('timeseries_id')
+    timeseries_id = request.args.get('timeseriesId')
     print('GET extension trigger_type timeseries:', trigger_type, timeseries_id)
     extension_ids = trigger.extension_get_trigger_type(ENGINE, trigger_type, timeseries_id)
     assert extension_ids, f'No extension found for trigger_type: {trigger_type}, timeseries_id: {timeseries_id}'
