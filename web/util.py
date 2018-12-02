@@ -41,7 +41,7 @@ def create_timeseries(variables_data):
 
         variables.append({
             'variableId': v['variableId'],
-            'timeseriesId': t['timeseriesId']
+            'timeseries': t
         })
         variable_names.append(v['variableId'])
     return variables, variable_names
