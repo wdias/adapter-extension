@@ -29,20 +29,28 @@ def extension_trigger_get(conn, extension_id):
     return triggers
 
 
-def extension_get_trigger_type(conn, trigger_type, timeseries_id=None):
-    assert trigger_type in ['OnChange', 'OnTime'], \
-        f'trigger trigger_type should have one of "OnChange", "OnTime"'
-    if timeseries_id is None:
-        rows = conn.execute(sql('''
-            SELECT extensionId
-            FROM triggers WHERE trigger_type=:trigger_type
-        '''), trigger_type=trigger_type).fetchall()
-    else:
-        rows = conn.execute(sql('''
-            SELECT extensionId
-            FROM triggers WHERE trigger_type=:trigger_type AND trigger_on=:timeseries_id
-        '''), trigger_type=trigger_type, timeseries_id=timeseries_id).fetchall()
+def extension_get_trigger_on_change(conn, timeseries_id):
+    rows = conn.execute(sql('''
+        SELECT extensionId, trigger_on
+        FROM triggers WHERE trigger_type=:trigger_type AND trigger_on=:timeseries_id
+    '''), trigger_type='OnChange', timeseries_id=timeseries_id).fetchall()
     return [r['extensionId'] for r in rows]
+
+
+def extension_get_trigger_on_time(conn):
+    rows = conn.execute(sql('''
+        SELECT trigger_on, GROUP_CONCAT(extensionId) as extensionIds
+        FROM triggers WHERE trigger_type=:trigger_type GROUP BY trigger_on
+    '''), trigger_type='OnTime').fetchall()
+    triggers = []
+    extension_ids = []
+    for r in rows:
+        triggers.append({
+            'trigger_on': r['trigger_on'],
+            'extensions': r['extensionIds'],
+        })
+        extension_ids += r['extensionIds']
+    return triggers, list(set(extension_ids))
 
 
 def extension_trigger_delete(conn, extension_id):

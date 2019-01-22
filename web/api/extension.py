@@ -88,12 +88,13 @@ def extension_get(extension_id):
     return jsonify(**extension)
 
 
-@bp.route('/extension/trigger_type/<trigger_type>', methods=['GET'])
-def extension_get_trigger_on(trigger_type):
+@bp.route('/extension/trigger_type/OnChange', methods=['GET'])
+def extension_get_trigger_on_change():
     timeseries_id = request.args.get('timeseriesId')
-    print('GET extension trigger_type timeseries:', trigger_type, timeseries_id)
-    extension_ids = trigger.extension_get_trigger_type(ENGINE, trigger_type, timeseries_id)
-    assert extension_ids, f'No extension found for trigger_type: {trigger_type}, timeseries_id: {timeseries_id}'
+    assert timeseries_id, 'timeseriesId should provide as query'
+    print('GET extension trigger_type: OnChange timeseries:', timeseries_id)
+    extension_ids = trigger.extension_get_trigger_on_change(ENGINE, timeseries_id)
+    assert extension_ids, f'No extension found for trigger_type: OnChange, timeseries_id: {timeseries_id}'
     extension_id_str = [f"'{ext_id}'" for ext_id in extension_ids]
     q = f'SELECT extensionId, extension, function, `data`, options FROM extensions WHERE extensionId IN ({",".join(extension_id_str)})'
     extensions = ENGINE.execute(q).fetchall()
@@ -102,6 +103,26 @@ def extension_get_trigger_on(trigger_type):
         ext['data'] = json.loads(ext['data'])
         ext['options'] = json.loads(ext['options'])
     return jsonify(extensions)
+
+
+@bp.route('/extension/trigger_type/OnTime', methods=['GET'])
+def extension_get_trigger_on_time():
+    print('GET extension trigger_type: OnTime ')
+    triggers, extension_ids = trigger.extension_get_trigger_on_time(ENGINE)
+    assert extension_ids, f'No extension found for trigger_type: OnTime'
+    extension_id_str = [f"'{ext_id}'" for ext_id in extension_ids]
+    q = f'SELECT extensionId, extension, function, `data`, options FROM extensions WHERE extensionId IN ({",".join(extension_id_str)})'
+    extensions = ENGINE.execute(q).fetchall()
+    extensions = [dict(ext) for ext in extensions]
+    extension_map = {}
+    for ext in extensions:
+        ext['data'] = json.loads(ext['data'])
+        ext['options'] = json.loads(ext['options'])
+        extension_map[ext['extensionId']] = ext
+    # Replace extensionId values with extension data
+    for t in triggers:
+        t['extensions'] = [extension_map[ex_id] for ex_id in t['extensions']]
+    return jsonify(triggers)
 
 
 @bp.route("/extension/<extension_id>", methods=['DELETE'])
