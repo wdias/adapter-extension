@@ -121,7 +121,7 @@ def extension_get_trigger_on_time():
         extension_map[ext['extensionId']] = ext
     # Replace extensionId values with extension data
     for t in triggers:
-        t['extensions'] = [extension_map[ex_id] for ex_id in t['extensions']]
+        t['extensions'] = [extension_map[ex_id] for ex_id in t['extensions'] if ex_id in extension_map]
     return jsonify(triggers)
 
 

@@ -47,9 +47,9 @@ def extension_get_trigger_on_time(conn):
     for r in rows:
         triggers.append({
             'trigger_on': r['trigger_on'],
-            'extensions': r['extensionIds'],
+            'extensions': r['extensionIds'].split(','),
         })
-        extension_ids += r['extensionIds']
+        extension_ids += r['extensionIds'].split(',')
     return triggers, list(set(extension_ids))
 
 
