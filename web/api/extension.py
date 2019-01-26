@@ -1,11 +1,14 @@
 from flask import Blueprint, request, jsonify, json
 from sqlalchemy import text as sql
+from typing import List
 
 from web import util
 from web.api import trigger
+from web.cache import Cache
 
 bp = Blueprint('timeseries', __name__)
 ENGINE = util.get_engine('metadata')
+CACHE = Cache()
 
 """ Extension Structure:
 {
@@ -47,11 +50,7 @@ def extension_create():
     if 'outputVariables' in data:
         for v in data['outputVariables']:
             assert v in variable_names, f'{v} is not defined in variables'
-    data['data'] = json.dumps({
-        'variables': data['variables'],
-        'inputVariables': data['inputVariables'],
-        'outputVariables': data['outputVariables']
-    })
+    data['data'] = dumps_data(data['variables'], data['inputVariables'], data['outputVariables'])
     if 'options' not in data:
         data['options'] = '{}'
     else:
@@ -64,6 +63,9 @@ def extension_create():
             INSERT IGNORE INTO extensions (extensionId, extension, function, data, options)
             VALUES (:extensionId, :extension, :function, :data, :options)
         '''), **data)
+        for t in data['trigger']:
+            if t['trigger_type'] is 'OnChange':
+                CACHE.hset_pipe_on_change_timeseries_extension_by_ids(t['trigger_on'], **data)
         del data['data']
         data['options'] = json.loads(data['options'])
         return jsonify(data)
@@ -72,19 +74,22 @@ def extension_create():
 @bp.route('/extension/<extension_id>', methods=['GET'])
 def extension_get(extension_id):
     print('GET extension:', extension_id)
-    extension = ENGINE.execute(sql('''
-        SELECT extensionId, extension, function, `data`, options
-        FROM extensions WHERE extensionId=:extension_id
-    '''), extension_id=extension_id).fetchone()
-    assert extension, f'Extension does not exists: {extension_id}'
-    extension = dict(extension)
-    data = json.loads(extension['data'])
-    extension['trigger'] = trigger.extension_trigger_get(ENGINE, extension_id)
-    extension['variables'] = data['variables']
-    extension['inputVariables'] = data['inputVariables']
-    extension['outputVariables'] = data['outputVariables']
-    extension['options'] = json.loads(extension['options'])
-    del extension['data']
+    extension = CACHE.get(extension_id)
+    if extension is None:
+        extension = ENGINE.execute(sql('''
+            SELECT extensionId, extension, function, `data`, options
+            FROM extensions WHERE extensionId=:extension_id
+        '''), extension_id=extension_id).fetchone()
+        assert extension, f'Extension does not exists: {extension_id}'
+        extension = dict(extension)
+        data = json.loads(extension['data'])
+        extension['trigger'] = trigger.extension_trigger_get(ENGINE, extension_id)
+        extension['variables'] = data['variables']
+        extension['inputVariables'] = data['inputVariables']
+        extension['outputVariables'] = data['outputVariables']
+        extension['options'] = json.loads(extension['options'])
+        del extension['data']
+        CACHE.set(extension_id, extension)
     return jsonify(**extension)
 
 
@@ -93,14 +98,19 @@ def extension_get_trigger_on_change():
     timeseries_id = request.args.get('timeseriesId')
     assert timeseries_id, 'timeseriesId should provide as query'
     print('GET extension trigger_type: OnChange timeseries:', timeseries_id)
-    extension_ids = trigger.extension_get_trigger_on_change(ENGINE, timeseries_id)
-    assert extension_ids, f'No extension found for trigger_type: OnChange, timeseries_id: {timeseries_id}'
-    extension_id_str = [f"'{ext_id}'" for ext_id in extension_ids]
-    q = f'SELECT extensionId, extension, function, `data`, options FROM extensions WHERE extensionId IN ({",".join(extension_id_str)})'
-    extensions = ENGINE.execute(q).fetchall()
-    extensions = [dict(ext) for ext in extensions]
+    extensions = CACHE.hgetall_on_change_extensions_by_timeseries(timeseries_id)
+    if extensions is None:
+        extension_ids = trigger.extension_get_trigger_on_change(ENGINE, timeseries_id)
+        assert extension_ids, f'No extension found for trigger_type: OnChange, timeseries_id: {timeseries_id}'
+        extension_id_str = [f"'{ext_id}'" for ext_id in extension_ids]
+        q = f'SELECT extensionId, extension, function, `data`, options FROM extensions WHERE extensionId IN ({",".join(extension_id_str)})'
+        extensions = ENGINE.execute(q).fetchall()
+        extensions = [dict(ext) for ext in extensions]
+        CACHE.hset_on_change_timeseries_extension(timeseries_id, extensions)
     for ext in extensions:
         ext['data'] = json.loads(ext['data'])
+        # TODO: Change for same format for the consistency
+        # extension['variables'],extension['inputVariables'],extension['outputVariables'] = loads_data(ext['data'])
         ext['options'] = json.loads(ext['options'])
     return jsonify(extensions)
 
@@ -117,6 +127,8 @@ def extension_get_trigger_on_time():
     extension_map = {}
     for ext in extensions:
         ext['data'] = json.loads(ext['data'])
+        # TODO: Change for same format for the consistency
+        # extension['variables'],extension['inputVariables'],extension['outputVariables'] = loads_data(ext['data'])
         ext['options'] = json.loads(ext['options'])
         extension_map[ext['extensionId']] = ext
     # Replace extensionId values with extension data
@@ -127,9 +139,29 @@ def extension_get_trigger_on_time():
 
 @bp.route("/extension/<extension_id>", methods=['DELETE'])
 def extension_delete(extension_id):
-    triggers = trigger.extension_trigger_delete(ENGINE, extension_id)
-    extension = ENGINE.execute(sql('''
+    extension = CACHE.get(extension_id)
+    del_triggers = trigger.extension_trigger_delete(ENGINE, extension_id)
+    del_extension = ENGINE.execute(sql('''
         DELETE FROM extensions
         WHERE extensionId=:extension_id
     '''), extension_id=extension_id)
+    # Remove from two caches s.t. extension and OnChange. TODO: Need to merge into on caching structure
+    if extension is not None:
+        for t in extension['trigger']:
+            if t['trigger_type'] is 'OnChange':
+                CACHE.hdel_pipe_on_change_extension(t['trigger_on'], [extension_id])
+        CACHE.delete(extension_id)
     return jsonify(extension_id)
+
+
+def dumps_data(variables: List[dict], input_variables: List[str], output_variables: List[str]):
+    return json.dumps({
+        'variables': variables,
+        'inputVariables': input_variables,
+        'outputVariables': output_variables
+    })
+
+
+def loads_data(data):
+    data = json.loads(data)
+    return data['variables'], data['inputVariables'], data['outputVariables']
