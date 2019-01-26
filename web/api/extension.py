@@ -43,6 +43,7 @@ SCHEDULER = TriggerScheduler()
 def extension_create():
     data = request.get_json()
     assert 'extensionId' in data, f'extensionId should be provided'
+    print('POST extension:', data['extensionId'])
     assert 'variables' in data and isinstance(data['variables'], list), f'variables should be provided'
     data['variables'], variable_names = util.create_timeseries(data['variables'])
     if 'inputVariables' in data:
@@ -65,9 +66,9 @@ def extension_create():
             VALUES (:extensionId, :extension, :function, :data, :options)
         '''), **data)
         for t in data['trigger']:
-            if t['trigger_type'] is 'OnChange':
+            if t['trigger_type'] == 'OnChange':
                 CACHE.hset_pipe_on_change_timeseries_extension_by_ids(t['trigger_on'], **data)
-            elif t['trigger_type'] is 'OnTime':
+            elif t['trigger_type'] == 'OnTime':
                 SCHEDULER.add_to_scheduler(t['trigger_on'], **data)
         del data['data']
         data['options'] = json.loads(data['options'])
@@ -143,17 +144,18 @@ def extension_get_trigger_on_time():
 @bp.route("/extension/<extension_id>", methods=['DELETE'])
 def extension_delete(extension_id):
     extension = CACHE.get(extension_id)
+    if extension is None:
+        extension = {'trigger': trigger.extension_trigger_get(ENGINE, extension_id)}
     del_triggers = trigger.extension_trigger_delete(ENGINE, extension_id)
     del_extension = ENGINE.execute(sql('''
         DELETE FROM extensions
         WHERE extensionId=:extension_id
     '''), extension_id=extension_id)
     # Remove from two caches s.t. extension and OnChange. TODO: Need to merge into on caching structure
-    if extension is not None:
-        for t in extension['trigger']:
-            if t['trigger_type'] is 'OnChange':
-                CACHE.hdel_pipe_on_change_extension(t['trigger_on'], [extension_id])
-        CACHE.delete(extension_id)
+    for t in extension['trigger']:
+        if t['trigger_type'] == 'OnChange':
+            CACHE.hdel_pipe_on_change_extension(t['trigger_on'], [extension_id])
+    CACHE.delete(extension_id)
     return jsonify(extension_id)
 
 

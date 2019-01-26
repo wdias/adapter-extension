@@ -36,16 +36,17 @@ class Cache:
     def delete(self, key: str):
         return self.redis.delete(key)
 
-    def hset_pipe_on_change_timeseries_extension_by_ids(self, timeseries_ids: List[str], extension_id, extension, function, data, options, *args, **kargs):
+    def hset_pipe_on_change_timeseries_extension_by_ids(self, timeseries_ids: List[str], extensionId, extension, function, data, options, *args, **kargs):
         pipe = self.redis.pipeline()
-        for ts in timeseries_ids:
-            pipe.hset(ts, extension_id, {
-                'extensionId': extension_id,
+        extension = {
+                'extensionId': extensionId,
                 'extension': extension,
                 'function': function,
                 'data': data,
                 'options': options,
-            })
+            }
+        for ts in timeseries_ids:
+            pipe.hset(ts, extensionId, json.dumps(extension))
         return pipe.execute()
 
     def hset_on_change_timeseries_extension(self, timeseries_id: str, extension: dict):
@@ -55,12 +56,12 @@ class Cache:
         return self.redis.hmset(timeseries_id, dict((extension.extensionId, extension) for extension in extensions))
 
     def hgetall_on_change_extensions_by_timeseries(self, timeseries_id: str) -> list:
-        return list(self.redis.hgetall(timeseries_id).values())
+        return list(json.loads(ex) for ex in self.redis.hgetall(timeseries_id).values())
 
     def hdel_pipe_on_change_extension(self, timeseries_ids: List[str], extension_ids: List[str]):
         pipe = self.redis.pipeline()
         for ts in timeseries_ids:
-            pipe.hdel(ts, extension_ids)
+            pipe.hdel(ts, *extension_ids)
         return pipe.execute()
 
 
@@ -72,9 +73,9 @@ class TriggerScheduler:
             port=os.getenv('redisPort', 6379), db=os.getenv('redisDB', 1),
             password=os.getenv('redisPassword', 'wdias123'))
 
-    def add_to_scheduler(self, trigger_on, extension_id, extension, function, data, options, *args, **kargs):
+    def add_to_scheduler(self, trigger_on, extensionId, extension, function, data, options, *args, **kargs):
         extension = {
-            'extension_id': extension_id,
+            'extensionId': extensionId,
             'extension': extension,
             'function': function,
             'data': data,

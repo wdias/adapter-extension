@@ -24,7 +24,7 @@ def extension_trigger_get(conn, extension_id):
     for r in rows:
         triggers.append({
             'trigger_type': r['trigger_type'],
-            'trigger_on': r['trigger_on'],
+            'trigger_on': r['trigger_on'].split(','),
         })
     return triggers
 
