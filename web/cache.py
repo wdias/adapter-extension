@@ -74,17 +74,17 @@ class TriggerScheduler:
             password=os.getenv('redisPassword', 'wdias123'))
 
     def add_to_scheduler(self, trigger_on, extensionId, extension, function, data, options, *args, **kargs):
-        extension = {
+        extensions = [{
             'extensionId': extensionId,
             'extension': extension,
             'function': function,
             'data': data,
             'options': options
-        }
+        }]
         triggers = []
         for on in trigger_on:
             triggers.append({
                 'trigger_on': on,
-                'extensions': json.dumps(extension)
+                'extensions': extensions
             })
         self.redis.lpush(self.scheduler_list, json.dumps(triggers))
