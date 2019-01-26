@@ -4,11 +4,12 @@ from typing import List
 
 from web import util
 from web.api import trigger
-from web.cache import Cache
+from web.cache import Cache, TriggerScheduler
 
 bp = Blueprint('timeseries', __name__)
 ENGINE = util.get_engine('metadata')
 CACHE = Cache()
+SCHEDULER = TriggerScheduler()
 
 """ Extension Structure:
 {
@@ -66,6 +67,8 @@ def extension_create():
         for t in data['trigger']:
             if t['trigger_type'] is 'OnChange':
                 CACHE.hset_pipe_on_change_timeseries_extension_by_ids(t['trigger_on'], **data)
+            elif t['trigger_type'] is 'OnTime':
+                SCHEDULER.add_to_scheduler(t['trigger_on'], **data)
         del data['data']
         data['options'] = json.loads(data['options'])
         return jsonify(data)
