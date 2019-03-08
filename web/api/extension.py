@@ -60,7 +60,7 @@ def extension_create():
     assert 'trigger' in data and isinstance(data['trigger'], list), f'trigger list should be provided'
 
     with ENGINE.begin() as conn:
-        trigger.extension_trigger_create(conn, data['extensionId'], data['trigger'])
+        trigger.extension_trigger_create(conn, data['extensionId'], data['trigger'], check_trigger_on(variable_names, data['variables']))
         conn.execute(sql('''
             INSERT IGNORE INTO extensions (extensionId, extension, function, data, options)
             VALUES (:extensionId, :extension, :function, :data, :options)
@@ -170,3 +170,8 @@ def dumps_data(variables: List[dict], input_variables: List[str], output_variabl
 def loads_data(data):
     data = json.loads(data)
     return data['variables'], data['inputVariables'], data['outputVariables']
+
+
+def check_trigger_on(variable_names, variables):
+    return lambda trigger_on: next((x['timeseries']['timeseriesId'] for x in variables if x['variableId'] == trigger_on), [trigger_on])\
+        if trigger_on in variable_names else trigger_on
