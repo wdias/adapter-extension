@@ -10,7 +10,7 @@ RUN pip3 install \
   requests \
   webargs==4.1.2 \
   sqlalchemy==1.3.0b1 \
-  https://cdn.mysql.com/Downloads/Connector-Python/mysql-connector-python-8.0.18.zip#md5=e9c473418b52bcae9687dddb0b69369f \
+  https://cdn.mysql.com/Downloads/Connector-Python/mysql-connector-python-8.0.22.zip#md5=75f7d8f9c769846a2a7777bc84ddfb65 \
   redis
 
 COPY . /src
